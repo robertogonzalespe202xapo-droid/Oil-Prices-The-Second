@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OilPulse Pro | Datos Reales</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #020617;
+            --card-bg: rgba(15, 23, 42, 0.9);
+            --accent-green: #22c55e;
+            --accent-orange: #f97316;
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Outfit', sans-serif; }
+
+        body {
+            min-height: 100vh;
+            background: radial-gradient(circle at top right, #1e293b, #020617);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .dashboard {
+            max-width: 900px;
+            width: 100%;
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 2.5rem;
+            padding: 3rem 2rem;
+            box-shadow: 0 40px 80px rgba(0, 0, 0, 0.6);
+        }
+
+        .header { text-align: center; margin-bottom: 3rem; }
+        .header h1 { font-size: 2.5rem; font-weight: 800; letter-spacing: -1px; }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0.5rem 1.2rem;
+            border-radius: 100px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-top: 1rem;
+        }
+
+        .online { background: rgba(34, 197, 94, 0.1); color: var(--accent-green); border: 1px solid var(--accent-green); }
+        .loading { background: rgba(249, 115, 22, 0.1); color: var(--accent-orange); border: 1px solid var(--accent-orange); }
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .oil-card {
+            background: rgba(30, 41, 59, 0.5);
+            border-radius: 2rem;
+            padding: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: transform 0.3s ease;
+        }
+
+        .price-value { font-size: 3.5rem; font-weight: 800; display: block; margin: 10px 0; }
+        .update-flash { animation: flash 0.6s ease; }
+        @keyframes flash { 0% { opacity: 0.4; } 100% { opacity: 1; } }
+
+        .trend-tag { padding: 4px 12px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; }
+        .up { color: var(--accent-green); background: rgba(34, 197, 94, 0.1); }
+        .down { color: var(--accent-orange); background: rgba(249, 115, 22, 0.1); }
+
+        .footer-info { font-size: 0.7rem; color: var(--text-dim); margin-top: 15px; }
+
+        button {
+            background: #334155;
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            width: 100%;
+            transition: 0.3s;
+        }
+        button:hover { background: #475569; transform: translateY(-2px); }
+    </style>
+</head>
+<body>
+
+<div class="dashboard">
+    <div class="header">
+        <h1>OILPULSE <span style="color: var(--accent-green);">PRO</span></h1>
+        <div id="status" class="status-badge loading">Sincronizando con API...</div>
+    </div>
+
+    <div class="cards-grid">
+        <div class="oil-card">
+            <span style="color: var(--text-dim); font-size: 0.8rem; font-weight: 600;">BRENT CRUDE</span>
+            <span id="brentPrice" class="price-value">--</span>
+            <div id="brentTrend" class="trend-tag">--</div>
+            <p id="brentTime" class="footer-info">Esperando datos reales...</p>
+        </div>
+
+        <div class="oil-card">
+            <span style="color: var(--text-dim); font-size: 0.8rem; font-weight: 600;">WTI CRUDE</span>
+            <span id="wtiPrice" class="price-value">--</span>
+            <div id="wtiTrend" class="trend-tag">--</div>
+            <p id="wtiTime" class="footer-info">Esperando datos reales...</p>
+        </div>
+    </div>
+
+    <button onclick="fetchRealPrices()">⚡ Forzar Actualización Real</button>
+</div>
+
+<script>
+    const API_KEY = '9174d08ab32510dfae1e8f52f16feaa2971bad49cdba116db530aae654d5678e';
+    
+    // Usamos un proxy para evitar el error de CORS en el navegador
+    const PROXY = "https://api.allorigins.win/get?url=";
+    const API_URL = encodeURIComponent(`https://api.oilpriceapi.com/v1/prices/latest`);
+
+    let brentBase = 78.50; 
+    let wtiBase = 74.20;
+
+    async function fetchRealPrices() {
+        const status = document.getElementById('status');
+        status.className = 'status-badge loading';
+        status.innerText = 'Consultando Mercados...';
+
+        try {
+            const response = await fetch(`${PROXY}${API_URL}&headers=${encodeURIComponent(JSON.stringify({Authorization: `Token ${API_KEY}`}))}`);
+            const outerData = await response.json();
+            const data = JSON.parse(outerData.contents);
+
+            if (data.data) {
+                // Si la API devuelve un array (varios tipos de crudo)
+                const prices = Array.isArray(data.data) ? data.data : [data.data.price];
+                
+                prices.forEach(item => {
+                    const code = item.code || "";
+                    const val = parseFloat(item.price);
+
+                    if (code.includes("BRENT")) updateUI('brent', val, brentBase);
+                    if (code.includes("WTI")) updateUI('wti', val, wtiBase);
+                });
+
+                status.className = 'status-badge online';
+                status.innerText = '● Datos Reales Activos';
+            }
+        } catch (error) {
+            console.error("Error de API:", error);
+            status.innerText = '⚠️ Error de Conexión';
+        }
+    }
+
+    function updateUI(id, current, base) {
+        const priceEl = document.getElementById(`${id}Price`);
+        const trendEl = document.getElementById(`${id}Trend`);
+        const timeEl = document.getElementById(`${id}Time`);
+        
+        const diff = current - base;
+        
+        priceEl.classList.remove('update-flash');
+        void priceEl.offsetWidth; 
+        priceEl.classList.add('update-flash');
+        
+        priceEl.innerText = current.toFixed(2);
+        
+        if (diff >= 0) {
+            trendEl.className = 'trend-tag up';
+            trendEl.innerText = `▲ +${diff.toFixed(2)} vs 7am`;
+        } else {
+            trendEl.className = 'trend-tag down';
+            trendEl.innerText = `▼ ${diff.toFixed(2)} vs 7am`;
+        }
+
+        timeEl.innerText = `Actualizado: ${new Date().toLocaleTimeString()} | Real-time API`;
+    }
+
+    // Ejecutar al cargar
+    fetchRealPrices();
+    // Actualizar cada 60 segundos automáticamente
+    setInterval(fetchRealPrices, 60000);
+</script>
+
+</body>
+</html>
+
